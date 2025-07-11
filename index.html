@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReboundX:Hookups | Exclusive & Connected</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";const firebaseConfig = {
+  apiKey: "AIzaSyB0YyMVAEQvj6B_dZBuo3NWUCKnLXpqkyU",
+  authDomain: "reboundx-web.firebaseapp.com",
+  projectId: "reboundx-web",
+  storageBucket: "reboundx-web.firebasestorage.app",
+  messagingSenderId: "897339724601",
+  appId: "1:897339724601:web:a539ce2f3074e77c480ee8"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+window.signUp = async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    await setDoc(doc(db, "users", userCredential.user.uid), {
+      email: email,
+      joined: new Date().toISOString(),
+      mood: "",
+      location: "",
+      role: "member"
+    });
+    alert('Sign-up successful!');
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.signIn = async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.signOutUser = () => {
+  signOut(auth);
+};
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    const docSnap = await getDoc(doc(db, "users", user.uid));
+    const userData = docSnap.exists() ? docSnap.data() : {};
+    document.getElementById('userProfile').innerHTML = `
+      <h3>Your Profile</h3>
+      <p><strong>Email:</strong> ${user.email}</p>
+      <p><strong>Mood:</strong> ${userData.mood || 'Not set'}</p>
+      <p><strong>Location:</strong> ${userData.location || 'Not set'}</p>
+      <button onclick="signOutUser()">Sign Out</button>
+    `;
+    document.getElementById('authCard').style.display = 'none';
+    document.getElementById('signupCard').style.display = 'flex';
+  } else {
+    document.getElementById('authCard').style.display = 'flex';
+    document.getElementById('signupCard').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('exclusive').style.display = 'none';
+  }
+});
+
+  </script>
+  <style>
+    /* [Same styles as before, retained] */
+    .profile {
+      margin-top: 2rem;
+      text-align: center;
+      padding: 1rem;
+      background-color: #fff2e0;
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="https://cdn-icons-png.flaticon.com/512/833/833472.png" alt="Heart Icon" />
+    ReboundX:Hookups
+  </div>
+  <div class="tagline">Newly single, just want to mingle — exclusive access only.</div>  <div class="card" id="authCard">
+    <h2>Member Access</h2>
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="signIn()">Login</button>
+    <button onclick="signUp()">Sign Up</button>
+  </div>  <div class="card" id="signupCard" style="display:none;">
+    <h2>Join the ReboundX Club</h2>
+    <input type="text" id="name" placeholder="Username" />
+    <input type="text" id="location" placeholder="City or Zip" />
+    <select id="mood">
+      <option selected disabled>Mood</option>
+      <option>Fresh Out</option>
+      <option>Looking to Explore</option>
+      <option>Friends Only</option>
+      <option>Hookups Only</option>
+    </select>
+    <button onclick="findMatches()">Request Access</button>
+  </div>  <div class="dashboard" id="dashboard">
+    <h2>Welcome, <span id="userName"></span>!</h2>
+    <div id="userProfile" class="profile"></div>
+    <p>Here's who's nearby:</p>
+    <div class="match-list" id="matchList"></div>
+    <div class="login">
+      <button onclick="toggleExclusive()">View Exclusive Benefits</button>
+    </div>
+  </div>  <div class="exclusive" id="exclusive">
+    <h3>Exclusive Members-Only Benefits</h3>
+    <ul>
+      <li>Private verified chats</li>
+      <li>Early RSVP to events</li>
+      <li>Anonymous interaction mode</li>
+      <li>Access to premium match filters</li>
+    </ul>
+    <h4>Contributor & Investor Tally</h4>
+    <div class="investor-list" id="investorList">
+      <p>🔒 124 Premium Members</p>
+      <p>📈 38 Active Investors</p>
+    </div>
+    <div class="gallery">
+      <img src="/mnt/data/A_promotional_digital_photograph_for_the_dating_ap.png" alt="Promo 1">
+      <img src="/mnt/data/A_promotional_digital_photograph_features_a_newly_.png" alt="Promo 2">
+      <img src="/mnt/data/A_digital_photograph_advertisement_for_a_matchmaki.png" alt="Promo 3">
+    </div>
+  </div>
+</body>
+</html>
