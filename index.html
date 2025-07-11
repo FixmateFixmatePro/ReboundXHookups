@@ -6,7 +6,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";const firebaseConfig = {
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";const firebaseConfig = {
   apiKey: "AIzaSyB0YyMVAEQvj6B_dZBuo3NWUCKnLXpqkyU",
   authDomain: "reboundx-web.firebaseapp.com",
   projectId: "reboundx-web",
@@ -19,19 +19,28 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+async function createUserDoc(user) {
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      email: user.email,
+      mood: "Single & Ready",
+      interests: "NSA",
+      gender: "Unspecified",
+      seeking: "Unspecified",
+      premium: false
+    });
+  }
+}
+
 window.signUp = async () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    await setDoc(doc(db, "users", userCredential.user.uid), {
-      email: email,
-      joined: new Date().toISOString(),
-      mood: "",
-      location: "",
-      role: "member"
-    });
-    alert('Sign-up successful!');
+    await createUserDoc(userCredential.user);
+    alert('Sign-up successful! You are now logged in.');
   } catch (error) {
     alert(error.message);
   }
@@ -41,99 +50,136 @@ window.signIn = async () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    await loadUserData(userCredential.user.uid);
   } catch (error) {
     alert(error.message);
   }
 };
 
+async function loadUserData(uid) {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    const data = userSnap.data();
+    document.getElementById("profileEmail").innerText = data.email;
+    document.getElementById("profileMood").innerText = data.mood;
+    document.getElementById("premiumStatus").innerText = data.premium ? "Yes" : "No";
+    document.getElementById("gender").value = data.gender;
+    document.getElementById("seeking").value = data.seeking;
+    document.getElementById("interests").value = data.interests;
+    loadMatches(data.gender, data.seeking);
+  }
+}
+
+window.updateProfile = async () => {
+  const user = auth.currentUser;
+  if (user) {
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, {
+      gender: document.getElementById("gender").value,
+      seeking: document.getElementById("seeking").value,
+      interests: document.getElementById("interests").value
+    });
+    alert("Profile updated!");
+  }
+};
+
+window.upgradeToPremium = async () => {
+  const user = auth.currentUser;
+  if (user) {
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, { premium: true });
+    document.getElementById("premiumStatus").innerText = "Yes";
+    alert("Thanks for upgrading to Premium!");
+  }
+};
+
+function loadMatches(userGender, userSeeking) {
+  const usersRef = collection(db, "users");
+  const q = query(usersRef, where("gender", "==", userSeeking), where("seeking", "==", userGender));
+  onSnapshot(q, (snapshot) => {
+    const matches = snapshot.docs.map(doc => doc.data());
+    document.getElementById("matches").innerHTML = matches.map(user => `
+      <div style="border-bottom: 1px solid #333; padding: 10px;">
+        <strong>${user.email}</strong><br>Interests: ${user.interests}
+        <button onclick="startChat('${user.email}')">Message</button>
+      </div>`).join('');
+  });
+}
+
+window.startChat = (recipient) => {
+  const message = prompt(`Send a message to ${recipient}`);
+  if (!message) return;
+  addDoc(collection(db, "messages"), {
+    from: auth.currentUser.email,
+    to: recipient,
+    message: message,
+    timestamp: Date.now()
+  });
+  alert("Message sent!");
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    document.getElementById('authCard').style.display = 'none';
+    document.getElementById('signupCard').style.display = 'block';
+    await loadUserData(user.uid);
+  } else {
+    document.getElementById('authCard').style.display = 'block';
+    document.getElementById('signupCard').style.display = 'none';
+  }
+});
+
 window.signOutUser = () => {
   signOut(auth);
 };
 
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    const docSnap = await getDoc(doc(db, "users", user.uid));
-    const userData = docSnap.exists() ? docSnap.data() : {};
-    document.getElementById('userProfile').innerHTML = `
-      <h3>Your Profile</h3>
-      <p><strong>Email:</strong> ${user.email}</p>
-      <p><strong>Mood:</strong> ${userData.mood || 'Not set'}</p>
-      <p><strong>Location:</strong> ${userData.location || 'Not set'}</p>
-      <button onclick="signOutUser()">Sign Out</button>
-    `;
-    document.getElementById('authCard').style.display = 'none';
-    document.getElementById('signupCard').style.display = 'flex';
-  } else {
-    document.getElementById('authCard').style.display = 'flex';
-    document.getElementById('signupCard').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'none';
-    document.getElementById('exclusive').style.display = 'none';
-  }
-});
-
   </script>
   <style>
-    /* [Same styles as before, retained] */
-    .profile {
-      margin-top: 2rem;
-      text-align: center;
-      padding: 1rem;
-      background-color: #fff2e0;
-      border-radius: 15px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+    body { font-family: Arial, sans-serif; background: #111; color: white; text-align: center; padding: 30px; }
+    .logo { font-size: 32px; margin-bottom: 10px; }
+    .tagline { font-size: 16px; margin-bottom: 30px; color: #aaa; }
+    .card { background: #1a1a1a; padding: 25px; border-radius: 10px; margin: auto; width: 320px; margin-bottom: 20px; }
+    input, select, button { display: block; margin: 10px auto; padding: 10px; width: 80%; border: none; border-radius: 5px; }
+    button { background: crimson; color: white; font-weight: bold; cursor: pointer; }
+    .gallery img { width: 200px; margin: 10px; border-radius: 10px; }
   </style>
 </head>
 <body>
-  <div class="logo">
-    <img src="https://cdn-icons-png.flaticon.com/512/833/833472.png" alt="Heart Icon" />
-    ReboundX:Hookups
-  </div>
-  <div class="tagline">Newly single, just want to mingle — exclusive access only.</div>  <div class="card" id="authCard">
+  <div class="logo">💋 ReboundX:Hookups</div>
+  <div class="tagline">No Games. No Strings. Just Chemistry.</div>  <div class="card" id="authCard">
     <h2>Member Access</h2>
     <input type="email" id="email" placeholder="Email" />
     <input type="password" id="password" placeholder="Password" />
     <button onclick="signIn()">Login</button>
     <button onclick="signUp()">Sign Up</button>
-  </div>  <div class="card" id="signupCard" style="display:none;">
-    <h2>Join the ReboundX Club</h2>
-    <input type="text" id="name" placeholder="Username" />
-    <input type="text" id="location" placeholder="City or Zip" />
-    <select id="mood">
-      <option selected disabled>Mood</option>
-      <option>Fresh Out</option>
-      <option>Looking to Explore</option>
-      <option>Friends Only</option>
-      <option>Hookups Only</option>
+  </div>  <div class="card" id="signupCard" style="display:none">
+    <h2>Your Profile</h2>
+    <p><strong>Email:</strong> <span id="profileEmail"></span></p>
+    <p><strong>Mood:</strong> <span id="profileMood"></span></p>
+    <p><strong>Premium Member:</strong> <span id="premiumStatus"></span></p>
+    <select id="gender">
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+      <option value="Unspecified">Unspecified</option>
     </select>
-    <button onclick="findMatches()">Request Access</button>
-  </div>  <div class="dashboard" id="dashboard">
-    <h2>Welcome, <span id="userName"></span>!</h2>
-    <div id="userProfile" class="profile"></div>
-    <p>Here's who's nearby:</p>
-    <div class="match-list" id="matchList"></div>
-    <div class="login">
-      <button onclick="toggleExclusive()">View Exclusive Benefits</button>
-    </div>
-  </div>  <div class="exclusive" id="exclusive">
-    <h3>Exclusive Members-Only Benefits</h3>
-    <ul>
-      <li>Private verified chats</li>
-      <li>Early RSVP to events</li>
-      <li>Anonymous interaction mode</li>
-      <li>Access to premium match filters</li>
-    </ul>
-    <h4>Contributor & Investor Tally</h4>
-    <div class="investor-list" id="investorList">
-      <p>🔒 124 Premium Members</p>
-      <p>📈 38 Active Investors</p>
-    </div>
-    <div class="gallery">
-      <img src="/mnt/data/A_promotional_digital_photograph_for_the_dating_ap.png" alt="Promo 1">
-      <img src="/mnt/data/A_promotional_digital_photograph_features_a_newly_.png" alt="Promo 2">
-      <img src="/mnt/data/A_digital_photograph_advertisement_for_a_matchmaki.png" alt="Promo 3">
-    </div>
+    <select id="seeking">
+      <option value="Male">Seeking Male</option>
+      <option value="Female">Seeking Female</option>
+      <option value="Unspecified">Unspecified</option>
+    </select>
+    <input id="interests" placeholder="e.g., NSA, Flirty" />
+    <button onclick="updateProfile()">Update Profile</button>
+    <button onclick="upgradeToPremium()">Upgrade to Premium</button>
+    <button onclick="signOutUser()">Sign Out</button>
+  </div>  <div class="card">
+    <h2>Your Matches</h2>
+    <div id="matches">Loading matches...</div>
+  </div>  <div class="gallery">
+    <img src="https://cdn.midjourney.com/87f17354-.../grid_0.webp" alt="ReboundX Couple 1">
+    <img src="https://cdn.midjourney.com/12fc3f6e-.../grid_0.webp" alt="ReboundX Couple 2">
+    <img src="https://cdn.midjourney.com/5a8c57bd-.../grid_0.webp" alt="ReboundX Couple 3">
   </div>
 </body>
-</html>
+  </html>
